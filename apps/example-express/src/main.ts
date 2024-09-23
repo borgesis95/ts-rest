@@ -1,11 +1,7 @@
 import * as express from 'express';
 import { initContract } from '@ts-rest/core';
 import { initServer } from '@ts-rest/express';
-import {
-  generateComponentFromContractOpenApi,
-  generateOpenApi,
-  writeDocumentation,
-} from '@ts-rest/open-api';
+import { generateOpenApi, getOpenApiDocumentation } from '@ts-rest/open-api';
 import * as bodyParser from 'body-parser';
 import { serve, setup } from 'swagger-ui-express';
 import cors = require('cors');
@@ -24,15 +20,19 @@ app.use(bodyParser.json());
 
 const s = initServer();
 
-export const SignalType = z.enum(['CREATE', 'UPDATE', 'DELETE', 'SEEDUPDATE']);
+export const SignalType = z
+  .enum(['CREATE', 'UPDATE', 'DELETE', 'SEEDUPDATE'])
+  .openapi('SignalType');
 
-const SignalSchema = z.object({
-  signalType: SignalType,
-  objectId: z.string(),
-  eserviceId: z.string(),
-  signalId: z.number(),
-  objectType: z.string(),
-});
+const SignalSchema = z
+  .object({
+    signalType: SignalType,
+    objectId: z.string(),
+    eserviceId: z.string(),
+    signalId: z.number(),
+    objectType: z.string().optional(),
+  })
+  .openapi('SignalRequest');
 
 export const SignalPayload = SignalSchema;
 export type SignalPayload = z.infer<typeof SignalSchema>;
@@ -115,8 +115,14 @@ export const contract = c.router({
     }),
 
     query: z.object({
-      signalId: z.coerce.number().min(0).default(0),
-      size: z.coerce.number().min(1).max(100).optional().default(10),
+      signalId: z.coerce
+        .number()
+        .min(0)
+        .default(0)
+        .openapi({ description: 'signalId from which to search' }),
+      size: z.coerce.number().min(1).max(100).optional().default(10).openapi({
+        description: 'number of signals to search',
+      }),
     }),
 
     responses: {
@@ -144,8 +150,46 @@ const openapi = generateOpenApi(contract, {
 const fileOutputDocument = `./pull-signals_${openapi.info.version}_.yaml`;
 writeFileSync(fileOutputDocument, yaml.dump(openapi));
 
-generateComponentFromContractOpenApi(contract);
-writeDocumentation();
+getOpenApiDocumentation(contract, {
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description:
+          'A bearer token in the format of a JWS and conformed to the specifications included in [RFC8725](https://tools.ietf.org/html/RFC8725).',
+      },
+    },
+  },
+
+  security: [
+    {
+      bearerAuth: [],
+    },
+  ],
+  servers: [
+    {
+      url: '/signals',
+      description: 'Pull signal data',
+    },
+  ],
+  info: {
+    title: 'Pull signal Service API',
+    version: '1.1.0',
+    contact: {
+      name: 'PagoPA support',
+      url: 'https://github.com/pagopa/interop-signalhub-core/issues',
+      email: 'Interop-sprint@pagopa.it',
+    },
+    termsOfService:
+      'https://docs.pagopa.it/interoperabilita-1/normativa-e-approfondimenti',
+    license: {
+      name: 'ISC',
+      url: 'https://opensource.org/license/isc-license-txt',
+    },
+  },
+});
 
 const apiDocs = express.Router();
 

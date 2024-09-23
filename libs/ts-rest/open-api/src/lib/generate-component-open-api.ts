@@ -9,7 +9,6 @@ import {
   AppRouteResponse,
   AppRouter,
   ContractAnyType,
-  ContractNoBody,
   isZodType,
 } from '@ts-rest/core';
 import { getPathsFromRouter } from './ts-rest-open-api';
@@ -17,7 +16,7 @@ import * as yaml from 'js-yaml';
 import { writeFileSync } from 'fs';
 import { z } from 'zod';
 import { RouteParameter } from '@asteasolutions/zod-to-openapi/dist/openapi-registry';
-import { OperationObject } from 'openapi3-ts';
+import { InfoObject, OpenAPIObject, OperationObject } from 'openapi3-ts';
 
 extendZodWithOpenApi(z);
 
@@ -47,7 +46,7 @@ export const generateComponentFromContractOpenApi = (
 
   // For each patch i have to register a path...
 
-  const resultPaths = paths.forEach((path) => {
+  paths.forEach((path) => {
     // --- Check operationId ---
     if (options.setOperationId === true) {
       const existingOp = operationIds.get(path.id);
@@ -58,17 +57,18 @@ export const generateComponentFromContractOpenApi = (
       }
       operationIds.set(path.id, path.paths);
     }
-
     // --- End check operationId ---
 
-    const responses = getResponses(path.route.responses);
     const headers = getHeaders(path.route.headers);
+    const responses = getResponses(path.route.responses);
+
     const body = path.route.method !== 'GET' ? path.route.body : null;
 
-    console.log('body', body);
-
     const routeConfigPath: RouteConfig = {
-      method: path.route.method as 'get' | 'post' | 'put' | 'delete' | 'patch',
+      description: path.route.description,
+      deprecated: path.route.deprecated,
+      summary: path.route.summary,
+      method: mapMethod[path.route.method] as RouteConfig['method'],
       request: {
         body: body
           ? {
@@ -83,7 +83,7 @@ export const generateComponentFromContractOpenApi = (
           : undefined,
 
         query: path.route.query as RouteParameter,
-        headers,
+        headers: headers as RouteParameter,
         params: path.route.pathParams as RouteParameter,
       },
       ...(options.setOperationId
@@ -101,26 +101,28 @@ export const generateComponentFromContractOpenApi = (
     registry.registerPath(routeConfigPath);
   });
 };
-function getOpenApiDocumentation() {
+export function getOpenApiDocumentation(
+  router: AppRouter,
+  apiDoc: Omit<OpenAPIObject, 'paths' | 'openapi'> & { info: InfoObject },
+  options: {
+    setOperationId?: boolean | 'concatenated-path';
+    jsonQuery?: boolean;
+    operationMapper?: (
+      operation: OperationObject,
+      appRoute: AppRoute,
+    ) => OperationObject;
+  } = {},
+) {
+  generateComponentFromContractOpenApi(router, options);
   const generator = new OpenApiGeneratorV3(registry.definitions);
 
-  return generator.generateDocument({
+  const apiDocuments = generator.generateDocument({
     openapi: '3.0.0',
-    info: {
-      version: '1.0.0',
-      title: 'My API test',
-      description: 'This is the API',
-    },
-    servers: [{ url: 'v1' }],
+    ...apiDoc,
   });
-}
 
-export function writeDocumentation() {
-  // OpenAPI JSON
-  const docs = getOpenApiDocumentation();
-
-  const fileOutputDocument = `./pull-signals_${docs.info.version}_.yaml`;
-  writeFileSync(fileOutputDocument, yaml.dump(docs));
+  const fileOutputDocument = `./pull-signals_${apiDocuments.info.version}_.yaml`;
+  writeFileSync(fileOutputDocument, yaml.dump(apiDocuments));
 }
 
 const getHeaders = (
@@ -139,6 +141,12 @@ const getResponses = (responses: Record<number, AppRouteResponse>) => {
           ? responseSchema.description
           : statusCode;
 
+      const httpSuccessCodePattern: RegExp = /^2[0-9]{2}$/;
+      const isSuccess = httpSuccessCodePattern.test(statusCode);
+      const keyMediaObject = isSuccess
+        ? 'application/json'
+        : 'application/problem+json';
+
       return {
         ...acc,
         [statusCode]: {
@@ -146,7 +154,7 @@ const getResponses = (responses: Record<number, AppRouteResponse>) => {
           ...(responseSchema
             ? {
                 content: {
-                  'application/json': {
+                  [keyMediaObject]: {
                     schema: responseSchema,
                   },
                 },

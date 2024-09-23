@@ -1,10 +1,4 @@
 openapi: 3.0.0
-info:
-  version: 1.0.0
-  title: My API test
-  description: This is the API
-servers:
-  - url: v1
 components:
   schemas:
     SignalPushResponse:
@@ -46,16 +40,18 @@ components:
         - title
         - detail
         - errors
+    SignalType:
+      type: string
+      enum:
+        - CREATE
+        - UPDATE
+        - DELETE
+        - SEEDUPDATE
     SignalRequest:
       type: object
       properties:
         signalType:
-          type: string
-          enum:
-            - CREATE
-            - UPDATE
-            - DELETE
-            - SEEDUPDATE
+          $ref: '#/components/schemas/SignalType'
         objectId:
           type: string
         eserviceId:
@@ -82,9 +78,27 @@ components:
       required:
         - signals
   parameters: {}
+security:
+  - bearerAuth: []
+servers:
+  - url: /signals
+    description: Pull signal data
+info:
+  title: Pull signal Service API
+  version: 1.1.0
+  contact:
+    name: PagoPA support
+    url: https://github.com/pagopa/interop-signalhub-core/issues
+    email: Interop-sprint@pagopa.it
+  termsOfService: https://docs.pagopa.it/interoperabilita-1/normativa-e-approfondimenti
+  license:
+    name: ISC
+    url: https://opensource.org/license/isc-license-txt
 paths:
   /status:
-    GET:
+    get:
+      description: Should return OK
+      summary: Health status endpoint
       responses:
         '200':
           description: '200'
@@ -95,7 +109,9 @@ paths:
                 enum:
                   - OK
   /signals:
-    POST:
+    post:
+      description: Insert a signal
+      summary: Push Signal
       parameters:
         - schema:
             type: string
@@ -119,29 +135,31 @@ paths:
         '400':
           description: '400'
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '401':
           description: '401'
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '403':
           description: '403'
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
         '500':
           description: '500'
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
   /signals/{eserviceId}:
-    GET:
+    get:
+      description: Retrieve a list o signals on a specific eservice starting from signalId
+      summary: Get a list of signals
       parameters:
         - schema:
             type: string
@@ -153,6 +171,7 @@ paths:
             nullable: true
             minimum: 0
             default: 0
+            description: signalId from which to search
           required: false
           name: signalId
           in: query
@@ -161,6 +180,7 @@ paths:
             minimum: 1
             maximum: 100
             default: 10
+            description: number of signals to search
           required: false
           name: size
           in: query
