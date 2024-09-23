@@ -25,7 +25,7 @@ type RouterPath = {
   paths: string[];
 };
 
-const getPathsFromRouter = (
+export const getPathsFromRouter = (
   router: AppRouter,
   pathHistory?: string[],
 ): RouterPath[] => {
@@ -51,7 +51,10 @@ const getPathsFromRouter = (
   return paths;
 };
 
-const getOpenApiSchemaFromZod = (zodType: unknown, useOutput = false) => {
+export const getOpenApiSchemaFromZod = (
+  zodType: unknown,
+  useOutput = false,
+) => {
   if (!isZodType(zodType)) {
     return null;
   }
@@ -59,7 +62,7 @@ const getOpenApiSchemaFromZod = (zodType: unknown, useOutput = false) => {
   return generateSchema(zodType, useOutput);
 };
 
-const getPathParameters = (path: string, zodObject?: unknown) => {
+export const getPathParameters = (path: string, zodObject?: unknown) => {
   const isZodObj = isZodObject(zodObject);
   const zodShape = isZodObj ? extractZodObjectShape(zodObject) : {};
 
@@ -176,7 +179,7 @@ declare module 'openapi3-ts' {
   }
 }
 
-const convertSchemaObjectToMediaTypeObject = (
+export const convertSchemaObjectToMediaTypeObject = (
   input: SchemaObject,
 ): MediaTypeObject => {
   const { mediaExamples: examples, ...schema } = input;
